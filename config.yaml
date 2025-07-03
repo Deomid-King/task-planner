@@ -1,0 +1,15 @@
+credentials
+  usernames
+    adminplan
+      email admin@example.com
+      name Администратор
+      password '$2b$12$e9XjLtM1BQ5nJldmjfGHZeKXY3IG8n2cJ.3e3XcIlYZG8WrEGiQga'  # пароль Planovik2025
+      role owner
+
+cookie
+  expiry_days 30
+  key supersecretkey
+  name planovik_cookie
+
+preauthorized
+  emails []
