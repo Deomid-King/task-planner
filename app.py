@@ -1,5 +1,6 @@
 import streamlit as st
 import time
+from streamlit_autorefresh import st_autorefresh
 from auth import login_user, create_user, get_all_users, get_supervisors
 from database import (
     init_db,
@@ -73,6 +74,12 @@ if "user" not in st.session_state:
     st.stop()
 
 user = st.session_state.user
+
+# 🔄 Автообновление каждую секунду только для сотрудников
+if user['role'] == 'employee':
+    st_autorefresh(interval=1000, key="refresh_employee_tasks")
+
+# Сайдбар
 st.sidebar.success(f"Вы вошли как {user['username']} ({user['role']})")
 if st.sidebar.button("Выйти"):
     del st.session_state.user
