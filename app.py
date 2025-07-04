@@ -10,12 +10,11 @@ from database import (
     get_tasks_pending_review
 )
 import os
-from datetime import datetime, timedelta
 
-# Инициализация базы данных
 init_db()
 
-# Стили
+st.set_page_config("Плановик задач", layout="centered")
+
 st.markdown("""
     <style>
         .task-card {
@@ -29,9 +28,6 @@ st.markdown("""
             font-weight: 600;
             font-family: Montserrat, sans-serif;
         }
-        .low { color: gray; }
-        .medium { color: #aaa; }
-        .high { color: black; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -57,21 +53,21 @@ if st.sidebar.button("Выйти"):
 
 # Владельцу — управление пользователями
 if user['role'] == 'owner':
-    st.subheader("👥 Управление пользователями")
+    st.subheader("👤 Управление пользователями")
     with st.form("add_user"):
-        new_username = st.text_input("Новый логин")
+        new_username = st.text_input("Логин")
         new_password = st.text_input("Пароль", type="password")
         new_role = st.selectbox("Роль", ["supervisor", "employee"])
         supervisor = None
         if new_role == "employee":
             supervisors = get_supervisors()
-            supervisor = st.selectbox("Руководитель", supervisors, format_func=lambda x: x[1]) if supervisors else None
+            supervisor = st.selectbox("Назначить руководителя", supervisors, format_func=lambda x: x[1]) if supervisors else None
         submitted = st.form_submit_button("Создать пользователя")
-        if submitted and new_username and new_password:
+        if submitted:
             create_user(new_username, new_password, new_role, supervisor[0] if supervisor else None)
             st.success(f"Пользователь {new_username} создан")
 
-# Руководитель — постановка задач
+# Создание задачи
 if user['role'] in ['owner', 'supervisor']:
     st.subheader("📝 Назначить задачу")
     employees = get_employees_by_supervisor(user['id'])
@@ -80,20 +76,22 @@ if user['role'] in ['owner', 'supervisor']:
             emp = st.selectbox("Сотрудник", employees, format_func=lambda x: x[1])
             title = st.text_input("Заголовок задачи")
             desc = st.text_area("Описание")
-            img = st.file_uploader("Фото", type=["jpg", "png"], accept_multiple_files=False)
+            img = st.file_uploader("Фото", type=["jpg", "png"])
             prio = st.slider("Приоритет (1-10)", 1, 10, 5)
-            mins = st.number_input("Срок (в минутах)", 1, 1440, 60)
+            mins = st.number_input("Срок (минут)", 1, 1440, 60)
             submit = st.form_submit_button("Отправить")
             if submit and emp and title:
-                img_path = None
+                image_path = None
                 if img:
-                    img_path = os.path.join("uploads", img.name)
-                    with open(img_path, "wb") as f:
+                    uploads_dir = "uploads"
+                    os.makedirs(uploads_dir, exist_ok=True)
+                    image_path = os.path.join(uploads_dir, img.name)
+                    with open(image_path, "wb") as f:
                         f.write(img.read())
-                create_task(user['id'], emp[0], title, desc, img_path, prio, int(mins))
-                st.success("Задача отправлена")
+                create_task(user['id'], emp[0], title, desc, image_path, prio, int(mins))
+                st.success("Задача назначена")
     else:
-        st.info("У вас нет подчинённых")
+        st.info("Нет подчиненных сотрудников")
 
 # Просмотр задач
 st.subheader("📋 Мои задачи")
@@ -108,7 +106,7 @@ for task in tasks:
     st.markdown(f"Описание: {task[4]}")
     st.markdown(f"Статус: `{task[8]}`")
     if task[5]:
-        st.image(task[5], width=300)
+        st.image(task[5], width=250)
     if user['role'] == 'employee' and task[8] == "не просмотрено":
         if st.button("Принять", key=f"accept_{task[0]}"):
             update_task_status(task[0], "в работе", accepted=True)
