@@ -15,10 +15,6 @@ from datetime import datetime, timedelta
 # Инициализация базы
 init_db()
 
-# Удаление флага перезапуска
-if "rerun" in st.session_state:
-    del st.session_state["rerun"]
-
 st.set_page_config("Плановик задач", layout="centered")
 
 st.markdown("""
@@ -37,7 +33,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Функция расчета таймера
+# Функция безопасного реруна
+def safe_rerun():
+    try:
+        st.experimental_rerun()
+    except Exception:
+        pass
+
+# Функция таймера
 def calculate_remaining_time(created_at_str, deadline_minutes):
     try:
         created_at = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
@@ -48,7 +51,7 @@ def calculate_remaining_time(created_at_str, deadline_minutes):
             return "⏰ Время вышло!"
         else:
             return f"⏳ Осталось: {str(remaining).split('.')[0]}"
-    except Exception:
+    except:
         return ""
 
 # Авторизация
@@ -60,8 +63,7 @@ if "user" not in st.session_state:
         user_record = login_user(login, password)
         if user_record:
             st.session_state.user = user_record
-            st.session_state.rerun = True
-            st.stop()
+            safe_rerun()
         else:
             st.error("Неверный логин или пароль")
     st.stop()
@@ -70,10 +72,9 @@ user = st.session_state.user
 st.sidebar.success(f"Вы вошли как {user['username']} ({user['role']})")
 if st.sidebar.button("Выйти"):
     del st.session_state.user
-    st.session_state.rerun = True
-    st.stop()
+    safe_rerun()
 
-# Владельцу — управление пользователями
+# Владелец: управление пользователями
 if user['role'] == 'owner':
     st.subheader("👤 Управление пользователями")
     with st.form("add_user"):
@@ -113,7 +114,7 @@ if user['role'] in ['owner', 'supervisor']:
                 create_task(user['id'], emp[0], title, desc, image_path, prio, int(mins))
                 st.success("Задача назначена")
     else:
-        st.info("Нет подчиненных сотрудников")
+        st.info("Нет подчинённых сотрудников")
 
 # Просмотр задач
 st.subheader("📋 Мои задачи")
@@ -129,7 +130,7 @@ for task in tasks:
     st.markdown(f"Статус: `{task[8]}`")
     if task[5]:
         st.image(task[5], width=250)
-    # Таймер
+
     if task[8] == "в работе":
         st.markdown(f"<span style='color:gray'>{calculate_remaining_time(task[9], task[7])}</span>", unsafe_allow_html=True)
 
@@ -137,16 +138,14 @@ for task in tasks:
     if user['role'] == 'employee' and task[8] == "не просмотрено":
         if st.button("Принять", key=f"accept_{task[0]}"):
             update_task_status(task[0], "в работе", accepted=True)
-            st.session_state.rerun = True
-            st.stop()
+            safe_rerun()
     elif user['role'] == 'employee' and task[8] == "в работе":
         if st.button("Выполнено", key=f"done_{task[0]}"):
             update_task_status(task[0], "на проверке", completed=True)
-            st.session_state.rerun = True
-            st.stop()
+            safe_rerun()
     elif user['role'] in ["supervisor", "owner"] and task[8] == "на проверке":
         if st.button("Проверено", key=f"check_{task[0]}"):
             update_task_status(task[0], "выполнено")
-            st.session_state.rerun = True
-            st.stop()
+            safe_rerun()
+
     st.markdown("</div>", unsafe_allow_html=True)
