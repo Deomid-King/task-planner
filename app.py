@@ -67,7 +67,7 @@ if "user" not in st.session_state:
         user_record = login_user(login, password)
         if user_record:
             st.session_state.user = user_record
-            st.experimental_set_query_params(rerun=str(time.time()))
+            st.query_params["rerun"] = str(time.time())
         else:
             st.error("Неверный логин или пароль")
     st.stop()
@@ -76,7 +76,7 @@ user = st.session_state.user
 st.sidebar.success(f"Вы вошли как {user['username']} ({user['role']})")
 if st.sidebar.button("Выйти"):
     del st.session_state.user
-    st.experimental_set_query_params(rerun=str(time.time()))
+    st.query_params["rerun"] = str(time.time())
     st.stop()
 
 # Управление пользователями (только для владельца)
@@ -143,17 +143,17 @@ for task in tasks:
     if user['role'] == 'employee' and task[8] == "не просмотрено":
         if st.button("Принять", key=f"accept_{task[0]}"):
             st.session_state.action = {"type": "accept", "task_id": task[0]}
-            st.experimental_set_query_params(rerun=str(time.time()))
+            st.query_params["rerun"] = str(time.time())
             st.stop()
     elif user['role'] == 'employee' and task[8] == "в работе":
         if st.button("Выполнено", key=f"done_{task[0]}"):
             st.session_state.action = {"type": "done", "task_id": task[0]}
-            st.experimental_set_query_params(rerun=str(time.time()))
+            st.query_params["rerun"] = str(time.time())
             st.stop()
     elif user['role'] in ["supervisor", "owner"] and task[8] == "на проверке":
         if st.button("Проверено", key=f"check_{task[0]}"):
             st.session_state.action = {"type": "check", "task_id": task[0]}
-            st.experimental_set_query_params(rerun=str(time.time()))
+            st.query_params["rerun"] = str(time.time())
             st.stop()
 
     st.markdown("</div>", unsafe_allow_html=True)
