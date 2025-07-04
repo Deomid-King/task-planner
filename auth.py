@@ -1,49 +1,40 @@
-import hashlib
-from database import create_connection
+import sqlite3
+import bcrypt
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+DB_NAME = "users.db"
 
-def login_user(username, password):
-    conn = create_connection()
-    cur = conn.cursor()
+def create_user(username, password, role, supervisor_id=None):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    cursor.execute("INSERT INTO users (username, password, role, supervisor_id) VALUES (?, ?, ?, ?)",
+                   (username, hashed, role, supervisor_id))
+    conn.commit()
+    conn.close()
 
-    cur.execute("SELECT id, username, password, role, supervisor_id FROM users WHERE username = ?", (username,))
-    user = cur.fetchone()
-
-    if user and user[2] == hash_password(password):
-        return {
-            "id": user[0],
-            "username": user[1],
-            "role": user[3],
-            "supervisor_id": user[4]
-        }
-
+def login_user(username, password, bypass_password=False):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+    user = cursor.fetchone()
+    conn.close()
+    if user:
+        if bypass_password or bcrypt.checkpw(password.encode(), user[2].encode()):
+            return {'id': user[0], 'username': user[1], 'role': user[3], 'supervisor_id': user[4]}
     return None
 
 def get_all_users():
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT id, username, role FROM users")
-    return cur.fetchall()
-def create_user(username, password, role, supervisor_id=None):
-    from database import hash_password
-    conn = create_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute('''
-            INSERT INTO users (username, password, role, supervisor_id)
-            VALUES (?, ?, ?, ?)
-        ''', (username, hash_password(password), role, supervisor_id))
-        conn.commit()
-        return True
-    except Exception as e:
-        print("Ошибка при создании пользователя:", e)
-        return False
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users")
+    users = cursor.fetchall()
+    conn.close()
+    return users
 
 def get_supervisors():
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT id, username FROM users WHERE role IN ('supervisor', 'owner')")
-    return cur.fetchall()
-
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username FROM users WHERE role = 'supervisor'")
+    users = cursor.fetchall()
+    conn.close()
+    return users
