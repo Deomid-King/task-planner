@@ -5,7 +5,16 @@ DB_NAME = "users.db"
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL,
+            supervisor_id INTEGER
+        )
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             supervisor_id INTEGER,
@@ -20,17 +29,17 @@ def init_db():
             accepted BOOLEAN DEFAULT 0,
             completed BOOLEAN DEFAULT 0
         )
-    ''')
+    """)
     conn.commit()
     conn.close()
 
 def create_task(supervisor_id, employee_id, title, description, image_path, priority, deadline):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute("""
         INSERT INTO tasks (supervisor_id, employee_id, title, description, image_path, priority, deadline)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (supervisor_id, employee_id, title, description, image_path, priority, deadline))
+    """, (supervisor_id, employee_id, title, description, image_path, priority, deadline))
     conn.commit()
     conn.close()
 
@@ -61,11 +70,11 @@ def get_tasks_for_employee(employee_id):
 def update_task_status(task_id, status, accepted=False, completed=False):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute("""
         UPDATE tasks
         SET status = ?, accepted = ?, completed = ?
         WHERE id = ?
-    ''', (status, int(accepted), int(completed), task_id))
+    """, (status, int(accepted), int(completed), task_id))
     conn.commit()
     conn.close()
 
