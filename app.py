@@ -14,9 +14,9 @@ from datetime import datetime, timedelta
 
 # Инициализация базы
 init_db()
-
 st.set_page_config("Плановик задач", layout="centered")
 
+# Стили
 st.markdown("""
     <style>
         .task-card {
@@ -33,17 +33,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Выполнение отложенного действия
-if "action" in st.session_state:
-    action = st.session_state.pop("action")
-    if action["type"] == "accept":
-        update_task_status(action["task_id"], "в работе", accepted=True)
-    elif action["type"] == "done":
-        update_task_status(action["task_id"], "на проверке", completed=True)
-    elif action["type"] == "check":
-        update_task_status(action["task_id"], "выполнено")
-
-# Функция таймера
+# Таймер
 def calculate_remaining_time(created_at_str, deadline_minutes):
     try:
         created_at = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
@@ -57,6 +47,16 @@ def calculate_remaining_time(created_at_str, deadline_minutes):
     except:
         return ""
 
+# Обработка действий
+if "action" in st.session_state:
+    action = st.session_state.pop("action")
+    if action["type"] == "accept":
+        update_task_status(action["task_id"], "в работе", accepted=True)
+    elif action["type"] == "done":
+        update_task_status(action["task_id"], "на проверке", completed=True)
+    elif action["type"] == "check":
+        update_task_status(action["task_id"], "выполнено")
+
 # Авторизация
 if "user" not in st.session_state:
     st.title("🔐 Вход в систему")
@@ -66,7 +66,6 @@ if "user" not in st.session_state:
         user_record = login_user(login, password)
         if user_record:
             st.session_state.user = user_record
-            st.experimental_rerun()
         else:
             st.error("Неверный логин или пароль")
     st.stop()
@@ -75,9 +74,9 @@ user = st.session_state.user
 st.sidebar.success(f"Вы вошли как {user['username']} ({user['role']})")
 if st.sidebar.button("Выйти"):
     del st.session_state.user
-    st.experimental_rerun()
+    st.stop()
 
-# Владелец: управление пользователями
+# Управление пользователями (только для владельца)
 if user['role'] == 'owner':
     st.subheader("👤 Управление пользователями")
     with st.form("add_user"):
@@ -93,7 +92,7 @@ if user['role'] == 'owner':
             create_user(new_username, new_password, new_role, supervisor[0] if supervisor else None)
             st.success(f"Пользователь {new_username} создан")
 
-# Создание задачи
+# Создание задачи (руководитель)
 if user['role'] in ['owner', 'supervisor']:
     st.subheader("📝 Назначить задачу")
     employees = get_employees_by_supervisor(user['id'])
@@ -119,7 +118,7 @@ if user['role'] in ['owner', 'supervisor']:
     else:
         st.info("Нет подчинённых сотрудников")
 
-# Просмотр задач
+# Отображение задач
 st.subheader("📋 Мои задачи")
 if user['role'] == 'employee':
     tasks = get_tasks_for_employee(user['id'])
@@ -137,7 +136,7 @@ for task in tasks:
     if task[8] == "в работе":
         st.markdown(f"<span style='color:gray'>{calculate_remaining_time(task[9], task[7])}</span>", unsafe_allow_html=True)
 
-    # Кнопки действий
+    # Действия
     if user['role'] == 'employee' and task[8] == "не просмотрено":
         if st.button("Принять", key=f"accept_{task[0]}"):
             st.session_state.action = {"type": "accept", "task_id": task[0]}
