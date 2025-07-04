@@ -10,8 +10,14 @@ from database import (
     get_tasks_pending_review
 )
 import os
+from datetime import datetime, timedelta
 
+# Инициализация базы
 init_db()
+
+# Удаление флага перезапуска
+if "rerun" in st.session_state:
+    del st.session_state["rerun"]
 
 st.set_page_config("Плановик задач", layout="centered")
 
@@ -31,6 +37,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Функция расчета таймера
+def calculate_remaining_time(created_at_str, deadline_minutes):
+    try:
+        created_at = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
+        deadline = created_at + timedelta(minutes=deadline_minutes)
+        now = datetime.now()
+        remaining = deadline - now
+        if remaining.total_seconds() <= 0:
+            return "⏰ Время вышло!"
+        else:
+            return f"⏳ Осталось: {str(remaining).split('.')[0]}"
+    except Exception:
+        return ""
+
 # Авторизация
 if "user" not in st.session_state:
     st.title("🔐 Вход в систему")
@@ -40,7 +60,8 @@ if "user" not in st.session_state:
         user_record = login_user(login, password)
         if user_record:
             st.session_state.user = user_record
-            st.experimental_rerun()
+            st.session_state.rerun = True
+            st.stop()
         else:
             st.error("Неверный логин или пароль")
     st.stop()
@@ -49,7 +70,8 @@ user = st.session_state.user
 st.sidebar.success(f"Вы вошли как {user['username']} ({user['role']})")
 if st.sidebar.button("Выйти"):
     del st.session_state.user
-    st.experimental_rerun()
+    st.session_state.rerun = True
+    st.stop()
 
 # Владельцу — управление пользователями
 if user['role'] == 'owner':
@@ -107,16 +129,24 @@ for task in tasks:
     st.markdown(f"Статус: `{task[8]}`")
     if task[5]:
         st.image(task[5], width=250)
+    # Таймер
+    if task[8] == "в работе":
+        st.markdown(f"<span style='color:gray'>{calculate_remaining_time(task[9], task[7])}</span>", unsafe_allow_html=True)
+
+    # Кнопки действий
     if user['role'] == 'employee' and task[8] == "не просмотрено":
         if st.button("Принять", key=f"accept_{task[0]}"):
             update_task_status(task[0], "в работе", accepted=True)
-            st.experimental_rerun()
+            st.session_state.rerun = True
+            st.stop()
     elif user['role'] == 'employee' and task[8] == "в работе":
         if st.button("Выполнено", key=f"done_{task[0]}"):
             update_task_status(task[0], "на проверке", completed=True)
-            st.experimental_rerun()
+            st.session_state.rerun = True
+            st.stop()
     elif user['role'] in ["supervisor", "owner"] and task[8] == "на проверке":
         if st.button("Проверено", key=f"check_{task[0]}"):
             update_task_status(task[0], "выполнено")
-            st.experimental_rerun()
+            st.session_state.rerun = True
+            st.stop()
     st.markdown("</div>", unsafe_allow_html=True)
