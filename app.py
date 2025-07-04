@@ -20,14 +20,14 @@ init_db()
 st.set_page_config(page_title="Плановик задач", layout="wide")
 
 # Загрузка конфигурации
-with open("config.yaml") as file:
+with open("config.yaml", encoding="utf-8") as file:
     config = yaml.load(file, Loader=SafeLoader)
 
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
     config['cookie']['key'],
-    config['cookie']['expiry_days'],
+    config['cookie']['expiry_days']
 )
 
 name, authentication_status, username = authenticator.login("Вход в систему", "main")
