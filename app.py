@@ -33,12 +33,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Функция безопасного реруна
-def safe_rerun():
-    try:
-        st.experimental_rerun()
-    except Exception:
-        pass
+# Выполнение отложенного действия
+if "action" in st.session_state:
+    action = st.session_state.pop("action")
+    if action["type"] == "accept":
+        update_task_status(action["task_id"], "в работе", accepted=True)
+    elif action["type"] == "done":
+        update_task_status(action["task_id"], "на проверке", completed=True)
+    elif action["type"] == "check":
+        update_task_status(action["task_id"], "выполнено")
 
 # Функция таймера
 def calculate_remaining_time(created_at_str, deadline_minutes):
@@ -63,7 +66,7 @@ if "user" not in st.session_state:
         user_record = login_user(login, password)
         if user_record:
             st.session_state.user = user_record
-            safe_rerun()
+            st.experimental_rerun()
         else:
             st.error("Неверный логин или пароль")
     st.stop()
@@ -72,7 +75,7 @@ user = st.session_state.user
 st.sidebar.success(f"Вы вошли как {user['username']} ({user['role']})")
 if st.sidebar.button("Выйти"):
     del st.session_state.user
-    safe_rerun()
+    st.experimental_rerun()
 
 # Владелец: управление пользователями
 if user['role'] == 'owner':
@@ -137,15 +140,15 @@ for task in tasks:
     # Кнопки действий
     if user['role'] == 'employee' and task[8] == "не просмотрено":
         if st.button("Принять", key=f"accept_{task[0]}"):
-            update_task_status(task[0], "в работе", accepted=True)
-            safe_rerun()
+            st.session_state.action = {"type": "accept", "task_id": task[0]}
+            st.stop()
     elif user['role'] == 'employee' and task[8] == "в работе":
         if st.button("Выполнено", key=f"done_{task[0]}"):
-            update_task_status(task[0], "на проверке", completed=True)
-            safe_rerun()
+            st.session_state.action = {"type": "done", "task_id": task[0]}
+            st.stop()
     elif user['role'] in ["supervisor", "owner"] and task[8] == "на проверке":
         if st.button("Проверено", key=f"check_{task[0]}"):
-            update_task_status(task[0], "выполнено")
-            safe_rerun()
+            st.session_state.action = {"type": "check", "task_id": task[0]}
+            st.stop()
 
     st.markdown("</div>", unsafe_allow_html=True)
