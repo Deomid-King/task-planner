@@ -30,7 +30,8 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-authenticator.login("Вход в систему", location="main")
+st.title("Вход в систему")
+authenticator.login(location='main')
 
 if st.session_state.get("authentication_status"):
     name = st.session_state["name"]
