@@ -14,9 +14,24 @@ from database import (
 import os
 from datetime import datetime, timedelta
 
-# Инициализация базы
-init_db()
+# Настройки
 st.set_page_config("Плановик задач", layout="centered")
+init_db()
+st_autorefresh(interval=1000, key="global_refresh")  # Обновление каждые 1 сек
+
+# Очистка старых файлов
+def clean_old_uploads(days=30):
+    folder = "uploads"
+    if not os.path.exists(folder):
+        return
+    for file in os.listdir(folder):
+        path = os.path.join(folder, file)
+        if os.path.isfile(path):
+            file_time = datetime.fromtimestamp(os.path.getctime(path))
+            if datetime.now() - file_time > timedelta(days=days):
+                os.remove(path)
+
+clean_old_uploads()
 
 # Стили
 st.markdown("""
@@ -27,10 +42,10 @@ st.markdown("""
             box-shadow: 0px 4px 8px rgba(0,0,0,0.1);
             padding: 16px;
             margin-bottom: 12px;
+            border-left: 6px solid #f0f0f0;
         }
-        .title {
-            font-weight: 600;
-            font-family: Montserrat, sans-serif;
+        .task-card.overdue {
+            border-left: 6px solid red;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -43,21 +58,22 @@ def calculate_remaining_time(created_at_str, deadline_minutes):
         now = datetime.now()
         remaining = deadline - now
         if remaining.total_seconds() <= 0:
-            return "⏰ Время вышло!"
+            return "⏰ Время вышло!", True
         else:
-            return f"⏳ Осталось: {str(remaining).split('.')[0]}"
+            return f"⏳ Осталось: {str(remaining).split('.')[0]}", False
     except:
-        return ""
+        return "", False
 
 # Обработка действий
 if "action" in st.session_state:
     action = st.session_state.pop("action")
-    if action["type"] == "accept":
-        update_task_status(action["task_id"], "в работе", accepted=True)
-    elif action["type"] == "done":
-        update_task_status(action["task_id"], "на проверке", completed=True)
-    elif action["type"] == "check":
-        update_task_status(action["task_id"], "выполнено")
+    update_task_status(
+        action["task_id"],
+        {"accept": "в работе", "done": "на проверке", "check": "выполнено"}[action["type"]],
+        accepted=(action["type"] == "accept"),
+        completed=(action["type"] == "done")
+    )
+    st.experimental_rerun()
 
 # Авторизация
 if "user" not in st.session_state:
@@ -68,25 +84,20 @@ if "user" not in st.session_state:
         user_record = login_user(login, password)
         if user_record:
             st.session_state.user = user_record
-            st.query_params["rerun"] = str(time.time())
+            st.experimental_rerun()
         else:
             st.error("Неверный логин или пароль")
     st.stop()
 
 user = st.session_state.user
 
-# 🔄 Автообновление каждую секунду только для сотрудников
-if user['role'] == 'employee':
-    st_autorefresh(interval=1000, key="refresh_employee_tasks")
-
 # Сайдбар
 st.sidebar.success(f"Вы вошли как {user['username']} ({user['role']})")
 if st.sidebar.button("Выйти"):
     del st.session_state.user
-    st.query_params["rerun"] = str(time.time())
-    st.stop()
+    st.experimental_rerun()
 
-# Управление пользователями (только для владельца)
+# Управление пользователями
 if user['role'] == 'owner':
     st.subheader("👤 Управление пользователями")
     with st.form("add_user"):
@@ -97,12 +108,11 @@ if user['role'] == 'owner':
         if new_role == "employee":
             supervisors = get_supervisors()
             supervisor = st.selectbox("Назначить руководителя", supervisors, format_func=lambda x: x[1]) if supervisors else None
-        submitted = st.form_submit_button("Создать пользователя")
-        if submitted:
+        if st.form_submit_button("Создать пользователя"):
             create_user(new_username, new_password, new_role, supervisor[0] if supervisor else None)
             st.success(f"Пользователь {new_username} создан")
 
-# Создание задачи (руководитель)
+# Назначение задачи
 if user['role'] in ['owner', 'supervisor']:
     st.subheader("📝 Назначить задачу")
     employees = get_employees_by_supervisor(user['id'])
@@ -114,13 +124,11 @@ if user['role'] in ['owner', 'supervisor']:
             img = st.file_uploader("Фото", type=["jpg", "png"])
             prio = st.slider("Приоритет (1-10)", 1, 10, 5)
             mins = st.number_input("Срок (минут)", 1, 1440, 60)
-            submit = st.form_submit_button("Отправить")
-            if submit and emp and title:
+            if st.form_submit_button("Отправить") and emp and title:
                 image_path = None
                 if img:
-                    uploads_dir = "uploads"
-                    os.makedirs(uploads_dir, exist_ok=True)
-                    image_path = os.path.join(uploads_dir, img.name)
+                    os.makedirs("uploads", exist_ok=True)
+                    image_path = os.path.join("uploads", img.name)
                     with open(image_path, "wb") as f:
                         f.write(img.read())
                 create_task(user['id'], emp[0], title, desc, image_path, prio, int(mins))
@@ -128,39 +136,45 @@ if user['role'] in ['owner', 'supervisor']:
     else:
         st.info("Нет подчинённых сотрудников")
 
-# Отображение задач
+# Фильтр по статусу
 st.subheader("📋 Мои задачи")
+selected_status = st.selectbox("Фильтр по статусу", ["Все", "не просмотрено", "в работе", "на проверке", "выполнено"])
+
+# Получение задач
 if user['role'] == 'employee':
     tasks = get_tasks_for_employee(user['id'])
 else:
     tasks = get_tasks_created_by_supervisor(user['id'])
 
+# Отображение задач
 for task in tasks:
-    st.markdown('<div class="task-card">', unsafe_allow_html=True)
+    if selected_status != "Все" and task[8] != selected_status:
+        continue
+
+    remaining_text, is_overdue = ("", False)
+    if task[8] == "в работе":
+        remaining_text, is_overdue = calculate_remaining_time(task[9], task[7])
+
+    border_class = "task-card overdue" if is_overdue else "task-card"
+    st.markdown(f'<div class="{border_class}">', unsafe_allow_html=True)
     st.markdown(f"**Задача:** {task[3]}")
     st.markdown(f"Описание: {task[4]}")
     st.markdown(f"Статус: `{task[8]}`")
-    if task[5]:
+
+    if task[5] and os.path.exists(task[5]):
         st.image(task[5], width=250)
 
-    if task[8] == "в работе":
-        st.markdown(f"<span style='color:gray'>{calculate_remaining_time(task[9], task[7])}</span>", unsafe_allow_html=True)
+    if remaining_text:
+        st.markdown(f"<span style='color:gray'>{remaining_text}</span>", unsafe_allow_html=True)
 
-    # Действия
     if user['role'] == 'employee' and task[8] == "не просмотрено":
         if st.button("Принять", key=f"accept_{task[0]}"):
             st.session_state.action = {"type": "accept", "task_id": task[0]}
-            st.query_params["rerun"] = str(time.time())
-            st.stop()
     elif user['role'] == 'employee' and task[8] == "в работе":
         if st.button("Выполнено", key=f"done_{task[0]}"):
             st.session_state.action = {"type": "done", "task_id": task[0]}
-            st.query_params["rerun"] = str(time.time())
-            st.stop()
     elif user['role'] in ["supervisor", "owner"] and task[8] == "на проверке":
         if st.button("Проверено", key=f"check_{task[0]}"):
             st.session_state.action = {"type": "check", "task_id": task[0]}
-            st.query_params["rerun"] = str(time.time())
-            st.stop()
 
     st.markdown("</div>", unsafe_allow_html=True)
